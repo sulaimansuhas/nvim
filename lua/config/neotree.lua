@@ -83,6 +83,7 @@
         window = {
           position = "left",
           width = 40,
+          auto_expand_width= true,
           mapping_options = {
             noremap = true,
             nowait = true,
