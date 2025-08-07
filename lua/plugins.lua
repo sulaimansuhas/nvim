@@ -16,10 +16,8 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require('lazy').setup({
-
 -- Git related plugins
-  'tpope/vim-fugitive',
-  'tpope/vim-rhubarb',
+  require('config.gitplugs'),
 -- Detect tabstop and shiftwidth automatically
   'tpope/vim-sleuth',
 -- Neo Tree
@@ -87,3 +85,5 @@ require('lazy').setup({
     build = ':TSUpdate',
   },
 }, {})
+
+vim.g.fugitive_gitlab_domains={['git@gitlab.turing.bio:turing/turingdb.git'] = 'https://gitlab.turing.bio/turing/turingdb.git'}

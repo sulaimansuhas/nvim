@@ -2,7 +2,13 @@ local M = {}
 
 M.config =  {
   -- Fuzzy Finder (files, lsp, etc)
-  { 'nvim-telescope/telescope.nvim', branch = '0.1.x', dependencies = { 'nvim-lua/plenary.nvim' } },
+  { 'nvim-telescope/telescope.nvim', branch = '0.1.x', dependencies = {
+    'nvim-lua/plenary.nvim',
+    {
+        "nvim-telescope/telescope-live-grep-args.nvim" ,
+        version = "^1.0.0",
+    }
+  } },
 
   -- Fuzzy Finder Algorithm which requires local dependencies to be built.
   -- Only load if `make` is available. Make sure you have the system
@@ -36,13 +42,17 @@ M.setup = function()
 
   -- Enable telescope fzf native, if installed
   pcall(require('telescope').load_extension, 'fzf')
+  pcall(require('telescope').load_extension, 'live_grep_args')
 
   -- See `:help telescope.builtin`
   vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles, { desc = '[?] Find recently opened files' })
-  vim.keymap.set('n', '<leader><space>', require('telescope.builtin').buffers, { desc = '[ ] Find existing buffers' })
+  vim.keymap.set('n', '<leader><space>', function()
+  require('telescope.builtin').buffers({ sort_mru=true })
+  end, { desc = '[ ] Find existing buffers' })
   vim.keymap.set('n', '<leader>/', require('telescope.builtin').current_buffer_fuzzy_find,
     { desc = '[/] Fuzzily search in current buffer' })
 
+  vim.keymap.set("n", "<leader>fg", ":lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>")
   vim.keymap.set('n', '<leader>gf', require('telescope.builtin').git_files, { desc = 'Search [G]it [F]iles' })
   vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files, { desc = '[S]earch [F]iles' })
   vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })

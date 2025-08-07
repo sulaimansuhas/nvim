@@ -37,3 +37,21 @@ vim.keymap.set({'n'}, '<leader>Y', '"+yg_', { desc = 'Copy To Clipboard Till The
 vim.keymap.set({'n'}, '<leader>yy', '"+yy', { desc = 'Copy To Line To Clipboard' })
 vim.keymap.set({'n','v'}, '<leader>p', '"+p', { desc = 'Paste From Clipboard After The Cursor' })
 vim.keymap.set({'n','v'}, '<leader>P', '"+P', { desc = 'Paste From Clipboard before The Cursor' })
+
+-- Fold Commands
+vim.keymap.set({'n','v'}, '<enter>', 'za', { desc = "Toggle Fold Under Cursor"})
+vim.keymap.set({'n','v'}, '<C-enter>', 'zA', { desc = "Toggle All Folds Recursively"})
+--vim.keymap.set({'n','v'}, '<leader>r', 'zR', { desc = "Toggle Folds Under Cursor"})
+--vim.keymap.set({'n','v'}, '<leader>m', 'zM', { desc = "Toggle All Folds"})
+vim.keymap.set({'n','v'}, '<leader>fo', function()
+  if vim.o.foldlevel == 0 then
+    vim.cmd('set foldlevel=99')
+  else
+    vim.cmd('set foldlevel=0')
+  end
+end, { desc = 'Toggle all folds' })
+
+
+
+-- Custom Commands
+-- vim.api.nvim_set_keymap('n', '<Leader>jf', ':Jsonfmt', { noremap = true, silent = true })

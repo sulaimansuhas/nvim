@@ -1,5 +1,9 @@
 -- [[ Configure LSP ]]
 --  This function gets run when an LSP connects to a particular buffer.
+-- vim.opt.expandtab = true    -- Use spaces instead of tabs
+-- vim.opt.tabstop = 4         -- Show tabs as 4 spaces
+-- vim.opt.shiftwidth = 4      -- Use 4 spaces for indentation
+-- vim.opt.softtabstop = 4     -- Insert 4 spaces when tab is pressed
 local on_attach = function(_, bufnr)
   -- NOTE: Remember that lua is a real programming language, and as such it is possible
   -- to define small helper and utility functions so you don't have to repeat yourself
@@ -73,6 +77,7 @@ capabilities = require('cmp_nvim_lsp').default_capabilities(capabilities)
 
 -- Ensure the servers above are installed
 local mason_lspconfig = require 'mason-lspconfig'
+local lspconfig = require 'lspconfig'
 
 mason_lspconfig.setup {
   ensure_installed = vim.tbl_keys(servers),
@@ -87,10 +92,36 @@ mason_lspconfig.setup {
 
 mason_lspconfig.setup_handlers {
   function(server_name)
-    require('lspconfig')[server_name].setup {
+    lspconfig[server_name].setup {
       capabilities = capabilities,
       on_attach = on_attach,
       settings = servers[server_name],
     }
   end,
 }
+
+lspconfig.clangd.setup {
+      on_attach = on_attach,
+      capabilities = capabilities,
+      root_dir = function()
+        return vim.fn.getcwd()
+      end,
+      cmd = {
+        'clangd',
+        '-j=4',
+        '--pch-storage=memory',
+        '--clang-tidy',
+        '--header-insertion=never',
+        '--background-index',
+        -- '--completion-style=bundled',
+        '--all-scopes-completion=false',
+        --'--include-cleaner-stdlib',
+        '--limit-references=100',
+        '--log=verbose',
+        '--limit-results=40',
+      },
+      filetypes = { 'cpp', 'c' },
+      flags = {
+        debounce_text_changes = 50,
+      },
+    }
