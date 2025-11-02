@@ -81,6 +81,7 @@ local lspconfig = require 'lspconfig'
 
 mason_lspconfig.setup {
   ensure_installed = vim.tbl_keys(servers),
+  automatic_installation = true,
   handlers = {
     function(server_name)
       local server = servers[server_name] or {}
@@ -88,16 +89,6 @@ mason_lspconfig.setup {
       require('lspconfig')[server_name].setup(server)
     end
   }
-}
-
-mason_lspconfig.setup_handlers {
-  function(server_name)
-    lspconfig[server_name].setup {
-      capabilities = capabilities,
-      on_attach = on_attach,
-      settings = servers[server_name],
-    }
-  end,
 }
 
 lspconfig.clangd.setup {
