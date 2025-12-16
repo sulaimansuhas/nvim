@@ -229,6 +229,6 @@
           }
         }
       })
-      vim.api.nvim_set_keymap('n', '\\', ':Neotree reveal<CR>', { silent = true })
+      vim.api.nvim_set_keymap('n', '\\', ':Neotree toggle<CR>', { silent = true })
     end,
   }
