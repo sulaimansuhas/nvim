@@ -1,4 +1,3 @@
-
   return {
     'hrsh7th/nvim-cmp',
     event = 'InsertEnter',
@@ -30,6 +29,9 @@
       local cmp = require 'cmp'
       local luasnip = require 'luasnip'
       luasnip.config.setup {}
+
+      -- Load custom snippets (written in Lua) from <config>/luasnippets/<filetype>.lua
+      require('luasnip.loaders.from_lua').lazy_load { paths = { vim.fn.stdpath 'config' .. '/luasnippets' } }
 
       cmp.setup {
         snippet = {
