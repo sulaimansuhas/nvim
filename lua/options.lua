@@ -47,6 +47,9 @@ vim.opt.foldtext = ""
 
 vim.opt.colorcolumn = "90"
 
+-- Keep cursor vertically centered (good for vertical/portrait monitors)
+vim.o.scrolloff = 999
+
 
 -- [[ Highlight on yank ]]
 -- See `:help vim.highlight.on_yank()`
