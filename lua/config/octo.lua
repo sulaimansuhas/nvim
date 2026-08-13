@@ -10,6 +10,9 @@ return {
     { "<leader>gr", "<cmd>Octo pr list<cr>", desc = "Octo: List PRs" },
   },
   config = function()
-    require("octo").setup()
+    require("octo").setup({
+      use_local_fs = true,
+      picker = "telescope",
+    })
   end,
 }
