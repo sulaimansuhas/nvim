@@ -53,5 +53,66 @@ end, { desc = 'Toggle all folds' })
 
 
 
+-- Header/Source Toggle
+local function find_counterpart(callback)
+  local ft = vim.bo.filetype
+  if ft ~= 'c' and ft ~= 'cpp' then return end
+
+  local function fallback()
+    local current = vim.api.nvim_buf_get_name(0)
+    local base = current:match('(.+)%.[^%.]+$')
+    local ext = current:match('%.([^%.]+)$')
+    local candidates = {}
+    if ext == 'h' or ext == 'hpp' then
+      candidates = { base .. '.cpp', base .. '.cc', base .. '.cxx' }
+    elseif ext == 'cpp' or ext == 'cc' or ext == 'cxx' then
+      candidates = { base .. '.h', base .. '.hpp' }
+    end
+    for _, candidate in ipairs(candidates) do
+      if vim.fn.filereadable(candidate) == 1 then callback(candidate); return end
+    end
+    vim.notify('No counterpart file found', vim.log.levels.WARN)
+  end
+
+  local has_clangd = false
+  for _, client in ipairs(vim.lsp.get_active_clients({ bufnr = 0 })) do
+    if client.name == 'clangd' then has_clangd = true; break end
+  end
+
+  if has_clangd then
+    local params = { textDocument = { uri = vim.uri_from_bufnr(0) } }
+    vim.lsp.buf_request(0, 'textDocument/switchSourceHeader', params, function(err, result)
+      if err or not result or result == '' then fallback()
+      else callback(vim.uri_to_fname(result)) end
+    end)
+  else
+    fallback()
+  end
+end
+
+local _split_partner_win = nil
+
+vim.keymap.set('n', '<leader>o', function()
+  find_counterpart(function(path)
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)) == path then
+        local target = (_split_partner_win and vim.api.nvim_win_is_valid(_split_partner_win))
+          and _split_partner_win or win
+        vim.api.nvim_win_close(target, false)
+        _split_partner_win = nil
+        return
+      end
+    end
+    vim.cmd('vsplit ' .. vim.fn.fnameescape(path))
+    _split_partner_win = vim.api.nvim_get_current_win()
+  end)
+end, { desc = 'Toggle header/source split' })
+
+vim.keymap.set('n', '<leader>O', function()
+  find_counterpart(function(path)
+    vim.cmd('edit ' .. vim.fn.fnameescape(path))
+  end)
+end, { desc = 'Switch to header/source in current window' })
+
 -- Custom Commands
 -- vim.api.nvim_set_keymap('n', '<Leader>jf', ':Jsonfmt', { noremap = true, silent = true })
