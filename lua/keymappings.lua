@@ -114,5 +114,9 @@ vim.keymap.set('n', '<leader>O', function()
   end)
 end, { desc = 'Switch to header/source in current window' })
 
+-- Zen mode (centered layout for vertical monitor)
+vim.keymap.set('n', '<leader>z', function() Snacks.zen() end, { desc = 'Toggle Zen Mode' })
+vim.keymap.set('n', '<leader>Z', function() Snacks.zen.zoom() end, { desc = 'Toggle Zen Zoom' })
+
 -- Custom Commands
 -- vim.api.nvim_set_keymap('n', '<Leader>jf', ':Jsonfmt', { noremap = true, silent = true })

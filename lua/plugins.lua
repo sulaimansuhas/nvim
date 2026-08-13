@@ -114,6 +114,7 @@ require('lazy').setup({
     opts = {
       gh = {},
       picker = {},
+      zen = {},
     },
     keys = {
       { "<leader>gi", function() Snacks.picker.gh_issue() end, desc = "GitHub Issues (open)" },
