@@ -39,7 +39,7 @@ vim.keymap.set({'n','v'}, '<leader>p', '"+p', { desc = 'Paste From Clipboard Aft
 vim.keymap.set({'n','v'}, '<leader>P', '"+P', { desc = 'Paste From Clipboard before The Cursor' })
 
 -- Fold Commands
-vim.keymap.set({'n','v'}, '<enter>', 'za', { desc = "Toggle Fold Under Cursor"})
+vim.keymap.set({'n','v'}, '<leader><enter>', 'za', { desc = "Toggle Fold Under Cursor"})
 vim.keymap.set({'n','v'}, '<C-enter>', 'zA', { desc = "Toggle All Folds Recursively"})
 --vim.keymap.set({'n','v'}, '<leader>r', 'zR', { desc = "Toggle Folds Under Cursor"})
 --vim.keymap.set({'n','v'}, '<leader>m', 'zM', { desc = "Toggle All Folds"})
