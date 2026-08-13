@@ -138,6 +138,9 @@
             ["?"] = "show_help",
             ["<"] = "prev_source",
             [">"] = "next_source",
+            ["F"] = function()
+              require("flash").jump()
+            end,
           }
         },
         nesting_rules = {},
