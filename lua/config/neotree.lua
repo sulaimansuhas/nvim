@@ -228,7 +228,39 @@
               ["gc"] = "git_commit",
               ["gp"] = "git_push",
               ["gg"] = "git_commit_and_push",
+              ["v"] = "open_gvdiffsplit",
+              ["/"] = "fuzzy_finder",
             }
+          },
+          commands = {
+            open_gvdiffsplit = function(state)
+              local node = state.tree:get_node()
+              if node.type ~= "file" then return end
+              local path = node.path or node:get_id()
+              if not path or path == "" then return end
+              -- Close any existing diff windows
+              for _, win in ipairs(vim.api.nvim_list_wins()) do
+                if vim.wo[win].diff then
+                  vim.api.nvim_win_close(win, true)
+                end
+              end
+              -- Find a normal (non-neo-tree) window, or create one
+              local target_win = nil
+              for _, win in ipairs(vim.api.nvim_list_wins()) do
+                local buf = vim.api.nvim_win_get_buf(win)
+                if vim.bo[buf].filetype ~= "neo-tree" then
+                  target_win = win
+                  break
+                end
+              end
+              if not target_win then
+                vim.cmd("topleft vnew")
+                target_win = vim.api.nvim_get_current_win()
+              end
+              vim.api.nvim_set_current_win(target_win)
+              vim.cmd("edit " .. vim.fn.fnameescape(path))
+              vim.cmd("Gvdiffsplit")
+            end
           }
         }
       })
