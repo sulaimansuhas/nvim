@@ -18,8 +18,6 @@ vim.opt.rtp:prepend(lazypath)
 require('lazy').setup({
 -- Git related plugins
   require('config.gitplugs'),
-  -- Octo: GitHub PR review
-  require('config.octo'),
 -- Detect tabstop and shiftwidth automatically
   'tpope/vim-sleuth',
 -- Neo Tree
