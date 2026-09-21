@@ -43,6 +43,9 @@
         end
         vim.keymap.set('n', '<leader>gh', highlight_menu,
           { buffer = bufnr, desc = '[G]it [H]ighlight toggles' })
+
+        -- Per-hunk comments (<leader>gc / gC / ga)
+        require('config.hunk_comments').attach(bufnr)
       end,
     },
   }
