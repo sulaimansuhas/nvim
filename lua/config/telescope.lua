@@ -100,6 +100,36 @@ local function make_toggle_reviewed(prompt_bufnr, reviewed, db_path, root)
   end
 end
 
+-- Root-relative path of the current buffer, or nil when outside the root.
+local function gs_buf_rel(root)
+  local name = vim.api.nvim_buf_get_name(0)
+  if name ~= '' and name:sub(1, #root + 1) == root .. '/' then
+    return name:sub(#root + 2)
+  end
+end
+
+-- One-shot on_complete hook: open the picker with the current file's row
+-- selected when it is in the list; otherwise telescope's default first row
+-- stands. Removes itself so typing/refreshes don't re-snap the selection.
+local function gs_preselect(cur_rel)
+  return {
+    function(picker)
+      picker._completion_callbacks = {}
+      if not cur_rel then return end
+      local index = 0
+      for entry in picker.manager:iter() do
+        index = index + 1
+        local value = entry.value
+        local arrow = value:find(' -> ', 1, true)
+        if value == cur_rel or (arrow and value:sub(arrow + 4) == cur_rel) then
+          pcall(function() picker:set_selection(picker:get_row(index)) end)
+          return
+        end
+      end
+    end,
+  }
+end
+
 local function jj_root()
   local out = vim.fn.systemlist({ 'jj', 'workspace', 'root' })
   if vim.v.shell_error ~= 0 or not out[1] or out[1] == '' then return nil end
@@ -198,6 +228,7 @@ M.setup = function()
     local gen = make_entry.gen_from_git_status({})
 
     builtin.git_status({
+      on_complete = gs_preselect(gs_buf_rel(root)),
       entry_maker = function(entry)
         local e = gen(entry)
         if not e then return end
@@ -337,6 +368,7 @@ M.setup = function()
     })
 
     pickers.new({}, {
+      on_complete = gs_preselect(gs_buf_rel(root)),
       prompt_title = 'jj status — ' .. vim.fn.fnamemodify(root, ':t')
         .. (state.args and (' [' .. state.args .. ']') or ''),
       default_text = state.filter,
