@@ -30,6 +30,8 @@ require('lazy').setup({
   require('config.linter'),
 -- Git Gutter Signs And More
   require('config.gitsigns'),
+-- JJ Gutter Signs (pure jj workspaces only)
+  require('config.jjsigns'),
 -- Useful plugin to show you pending keybinds.
   { 'folke/which-key.nvim',  opts = {} },
 -- Setup Theme

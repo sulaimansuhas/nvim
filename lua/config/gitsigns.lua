@@ -14,6 +14,22 @@
       numhl = true,
       word_diff = false,
       on_attach = function(bufnr)
+        -- In jj workspaces whose `.git` is a pointer file into another
+        -- checkout's primary git dir (not a real worktree), git sees that
+        -- checkout's index against this workspace's files — hunks would mix
+        -- workspaces. Bail out; jjsigns owns these buffers.
+        local file = vim.api.nvim_buf_get_name(bufnr)
+        local jjroot = file ~= '' and vim.fs.root(vim.fs.dirname(file), '.jj') or nil
+        if jjroot then
+          local dotgit = vim.uv.fs_stat(jjroot .. '/.git')
+          if dotgit and dotgit.type ~= 'directory' then
+            local gitdir = vim.fn.systemlist({ 'git', '-C', jjroot, 'rev-parse', '--absolute-git-dir' })[1]
+            if not (vim.v.shell_error == 0 and gitdir and gitdir:find('/%.git/worktrees/')) then
+              return false
+            end
+          end
+        end
+
         vim.keymap.set('n', '<leader>gp', require('gitsigns').prev_hunk,
           { buffer = bufnr, desc = '[G]o to [P]revious Hunk' })
         vim.keymap.set('n', '<leader>gn', require('gitsigns').next_hunk, { buffer = bufnr, desc = '[G]o to [N]ext Hunk' })
