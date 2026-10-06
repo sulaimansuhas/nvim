@@ -36,14 +36,87 @@ local function gs_repo_root()
   return out[1]
 end
 
--- Fingerprint a repo-relative file so reviewed marks can be invalidated when
+-- Fingerprint a root-relative file so reviewed marks can be invalidated when
 -- the file changes after being marked. Renames ("OLD -> NEW") hash NEW.
-local function gs_file_hash(rel)
+local function gs_file_hash(root, rel)
   local arrow = rel:find(' -> ', 1, true)
   if arrow then rel = rel:sub(arrow + 4) end
-  local path = gs_repo_root() .. '/' .. rel
+  local path = root .. '/' .. rel
   if vim.fn.filereadable(path) == 0 then return 'GONE' end
   return vim.fn.sha256(table.concat(vim.fn.readfile(path, 'b'), '\n'))
+end
+
+-- A mark stores the file's content hash at mark time; if the file has
+-- changed since, it is no longer "reviewed" -- drop the mark.
+local function gs_prune_stale(db_path, reviewed, root)
+  local dirty = false
+  for rel, saved in pairs(reviewed) do
+    local now = gs_file_hash(root, rel)
+    if saved == true then -- legacy boolean mark: adopt current content
+      reviewed[rel] = now
+      dirty = true
+    elseif saved ~= now then
+      reviewed[rel] = nil
+      dirty = true
+    end
+  end
+  if dirty then gs_save_db(db_path, reviewed) end
+end
+
+-- Open a file in a real editor window, never the neo-tree sidebar
+-- (neo-tree refuses file buffers, which leaves you staring at the tree).
+local function open_in_code_window(file_path)
+  local target
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.bo[buf].filetype ~= 'neo-tree' then
+      target = win
+      break
+    end
+  end
+  if target then
+    vim.api.nvim_set_current_win(target)
+  end
+  vim.cmd('edit ' .. vim.fn.fnameescape(file_path))
+end
+
+-- <C-r> handler shared by the git and jj status pickers: toggle the mark,
+-- then refresh without losing the current selection (refresh resets to top).
+local function make_toggle_reviewed(prompt_bufnr, reviewed, db_path, root)
+  local action_state = require('telescope.actions.state')
+  return function()
+    local entry = action_state.get_selected_entry()
+    if not entry then return end
+    reviewed[entry.value] = (not reviewed[entry.value]) and gs_file_hash(root, entry.value) or nil
+    gs_save_db(db_path, reviewed)
+    local picker = action_state.get_current_picker(prompt_bufnr)
+    local row = picker:get_selection_row()
+    local callbacks = { unpack(picker._completion_callbacks) }
+    picker:register_completion_callback(function(self)
+      self:set_selection(row)
+      self._completion_callbacks = callbacks
+    end)
+    picker:refresh(picker.finder, { reset_prompt = false })
+  end
+end
+
+local function jj_root()
+  local out = vim.fn.systemlist({ 'jj', 'workspace', 'root' })
+  if vim.v.shell_error ~= 0 or not out[1] or out[1] == '' then return nil end
+  return out[1]
+end
+
+-- Reviewed-marks db for jj workspaces: share the git-dir db when the git dir
+-- really belongs to this root (colocated or a real worktree). A foreign
+-- gitdir pointer (secondary jj workspace hack) would collide with the other
+-- workspace's marks, so those use their own .jj dir instead.
+local function js_db_path(root)
+  local out = vim.fn.systemlist({ 'git', '-C', root, 'rev-parse', '--absolute-git-dir' })
+  if vim.v.shell_error == 0 and out[1] and out[1] ~= ''
+    and (out[1] == root .. '/.git' or out[1]:find('/%.git/worktrees/')) then
+    return out[1] .. '/telescope_gs_reviewed.json'
+  end
+  return root .. '/.jj/telescope_gs_reviewed.json'
 end
 
 M.config =  {
@@ -115,21 +188,8 @@ M.setup = function()
 
     local db_path  = gs_db_path()
     local reviewed = gs_load_db(db_path)
-
-    -- A mark stores the file's content hash at mark time; if the file has
-    -- changed since, it is no longer "reviewed" -- drop the mark.
-    local dirty = false
-    for rel, saved in pairs(reviewed) do
-      local now = gs_file_hash(rel)
-      if saved == true then -- legacy boolean mark: adopt current content
-        reviewed[rel] = now
-        dirty = true
-      elseif saved ~= now then
-        reviewed[rel] = nil
-        dirty = true
-      end
-    end
-    if dirty then gs_save_db(db_path, reviewed) end
+    local root     = gs_repo_root()
+    gs_prune_stale(db_path, reviewed, root)
 
     local displayer = entry_display.create({
       separator = ' ',
@@ -160,52 +220,189 @@ M.setup = function()
         return e
       end,
       attach_mappings = function(prompt_bufnr, map)
-        -- Open the picked file in a real editor window, never the neo-tree sidebar
-        -- (neo-tree refuses file buffers, which otherwise leaves you staring at the tree).
         actions.select_default:replace(function()
           local entry = action_state.get_selected_entry()
           actions.close(prompt_bufnr)
           if not entry then return end
-          local target
-          for _, win in ipairs(vim.api.nvim_list_wins()) do
-            local buf = vim.api.nvim_win_get_buf(win)
-            if vim.bo[buf].filetype ~= 'neo-tree' then
-              target = win
-              break
-            end
-          end
-          if target then
-            vim.api.nvim_set_current_win(target)
-          end
           local rel = entry.value
           -- git status renames come through as "OLD -> NEW"; take NEW.
           local arrow = rel and rel:find(' -> ', 1, true)
           if arrow then rel = rel:sub(arrow + 4) end
-          local file_path = gs_repo_root() .. '/' .. rel
-          vim.cmd('edit ' .. vim.fn.fnameescape(file_path))
+          open_in_code_window(root .. '/' .. rel)
         end)
 
-        local function toggle_reviewed()
-          local entry = action_state.get_selected_entry()
-          if not entry then return end
-          reviewed[entry.value] = (not reviewed[entry.value]) and gs_file_hash(entry.value) or nil
-          gs_save_db(db_path, reviewed)
-          local picker = action_state.get_current_picker(prompt_bufnr)
-          -- refresh() resets the selection to the top; restore it so marking
-          -- doesn't lose your place in the list.
-          local row = picker:get_selection_row()
-          local callbacks = { unpack(picker._completion_callbacks) }
-          picker:register_completion_callback(function(self)
-            self:set_selection(row)
-            self._completion_callbacks = callbacks
-          end)
-          picker:refresh(picker.finder, { reset_prompt = false })
-        end
-        map({ 'i', 'n' }, '<C-r>', toggle_reviewed)
+        map({ 'i', 'n' }, '<C-r>', make_toggle_reviewed(prompt_bufnr, reviewed, db_path, root))
         return true
       end,
     })
   end, { desc = '[G]it [S]tatus' })
+
+  -- jj-native status picker: same reviewed marks and <C-r> toggle as
+  -- <leader>gs, but fed by `jj diff --summary` so it works in jj
+  -- workspaces (including pure ones where git_status fails).
+  --
+  -- Per-workspace session state: the search filter is restored on reopen,
+  -- and the diff source (extra `jj diff` args, e.g. "--from main") sticks
+  -- until changed via <C-e> in the picker or :JjStatus <args>.
+  local js_session = {}
+
+  local function jj_status_open(args_override)
+    local pickers       = require('telescope.pickers')
+    local finders       = require('telescope.finders')
+    local conf          = require('telescope.config').values
+    local actions       = require('telescope.actions')
+    local action_state  = require('telescope.actions.state')
+    local entry_display = require('telescope.pickers.entry_display')
+
+    local root = jj_root()
+    if not root then
+      vim.notify('Not inside a jj workspace', vim.log.levels.WARN)
+      return
+    end
+    local state = js_session[root] or {}
+    js_session[root] = state
+    if args_override ~= nil then
+      state.args = args_override ~= '' and args_override or nil
+    end
+    local extra = {}
+    if state.args then
+      -- Shell-like tokenizing: 'quoted' / "quoted" segments stay one
+      -- argument and lose their quotes (there is no shell in between, so
+      -- quotes would otherwise reach jj verbatim and break revsets).
+      local s, i = state.args, 1
+      while i <= #s do
+        local c = s:sub(i, i)
+        if c:match('%s') then
+          i = i + 1
+        elseif c == '"' or c == "'" then
+          local close = s:find(c, i + 1, true)
+          if not close then
+            table.insert(extra, s:sub(i + 1))
+            break
+          end
+          table.insert(extra, s:sub(i + 1, close - 1))
+          i = close + 1
+        else
+          local stop = s:find('%s', i) or (#s + 1)
+          table.insert(extra, s:sub(i, stop - 1))
+          i = stop
+        end
+      end
+    end
+
+    local cmd = { 'jj', '--color=never', '--no-pager', 'diff', '--summary' }
+    vim.list_extend(cmd, extra)
+    local summary = vim.fn.systemlist(cmd)
+    if vim.v.shell_error ~= 0 then
+      vim.notify('jj diff failed:\n' .. table.concat(summary, '\n'), vim.log.levels.ERROR)
+      return
+    end
+
+    local entries = {}
+    for _, line in ipairs(summary) do
+      local status, rel = line:match('^(%u)%s+(.+)$')
+      if status and rel then
+        -- jj renames print "R {old => new}"; open/hash the new path.
+        local pre, _, new, post = rel:match('^(.*){(.*) => (.*)}(.*)$')
+        if pre then rel = pre .. new .. post end
+        -- jj prints paths relative to the cwd; store them root-relative so
+        -- marks stay stable across sessions started in different directories.
+        local abs = vim.fn.simplify(vim.fn.fnamemodify(rel, ':p'))
+        if abs:sub(1, #root + 1) == root .. '/' then
+          rel = abs:sub(#root + 2)
+        end
+        table.insert(entries, { status = status, rel = rel })
+      end
+    end
+    if #entries == 0 then
+      vim.notify('jj: no changes' .. (state.args and (' for: jj diff ' .. state.args) or ' in working copy'),
+        vim.log.levels.INFO)
+      return
+    end
+
+    local db_path  = js_db_path(root)
+    local reviewed = gs_load_db(db_path)
+    gs_prune_stale(db_path, reviewed, root)
+
+    local labels = {
+      M = { 'modified', 'DiagnosticHint' },
+      A = { 'added', 'DiagnosticOk' },
+      D = { 'deleted', 'DiagnosticError' },
+      R = { 'renamed', 'DiagnosticWarn' },
+      C = { 'copied', 'DiagnosticWarn' },
+    }
+    local displayer = entry_display.create({
+      separator = ' ',
+      items = { { width = 1 }, { width = 9 }, { remaining = true } },
+    })
+
+    pickers.new({}, {
+      prompt_title = 'jj status — ' .. vim.fn.fnamemodify(root, ':t')
+        .. (state.args and (' [' .. state.args .. ']') or ''),
+      default_text = state.filter,
+      finder = finders.new_table({
+        results = entries,
+        entry_maker = function(e)
+          return {
+            value = e.rel,
+            status = e.status,
+            ordinal = e.status .. ' ' .. e.rel,
+            display = function(tbl)
+              local mark = reviewed[tbl.value] and '✓' or ' '
+              local label = labels[tbl.status] or { tbl.status, 'Comment' }
+              return displayer({ { mark, 'DiagnosticOk' }, { label[1], label[2] }, tbl.value })
+            end,
+          }
+        end,
+      }),
+      sorter = conf.generic_sorter({}),
+      -- Diff preview like the git_status builtin has. `root:"…"` filesets keep
+      -- root-relative paths working when nvim's cwd is a subdirectory.
+      previewer = require('telescope.previewers').new_termopen_previewer({
+        title = 'jj diff',
+        get_command = function(entry)
+          local preview = { 'jj', '--no-pager', '--color=always', 'diff' }
+          vim.list_extend(preview, extra)
+          table.insert(preview, 'root:"' .. entry.value .. '"')
+          return preview
+        end,
+      }),
+      attach_mappings = function(prompt_bufnr, map)
+        -- Keep the last-typed filter so the next open restores it.
+        vim.api.nvim_create_autocmd({ 'TextChangedI', 'TextChanged' }, {
+          buffer = prompt_bufnr,
+          callback = function()
+            state.filter = action_state.get_current_line()
+          end,
+        })
+
+        actions.select_default:replace(function()
+          local entry = action_state.get_selected_entry()
+          actions.close(prompt_bufnr)
+          if not entry then return end
+          open_in_code_window(root .. '/' .. entry.value)
+        end)
+        map({ 'i', 'n' }, '<C-r>', make_toggle_reviewed(prompt_bufnr, reviewed, db_path, root))
+
+        -- <C-e>: change the diff source (empty input resets to working copy).
+        map({ 'i', 'n' }, '<C-e>', function()
+          actions.close(prompt_bufnr)
+          vim.ui.input({ prompt = 'jj diff args (empty = working copy) > ', default = state.args or '' },
+            function(input)
+              if input == nil then return end -- cancelled
+              vim.schedule(function() jj_status_open(input) end)
+            end)
+        end)
+        return true
+      end,
+    }):find()
+  end
+
+  vim.keymap.set('n', '<leader>js', function() jj_status_open() end, { desc = '[J]j [S]tatus' })
+  vim.api.nvim_create_user_command('JjStatus', function(opts)
+    -- No args = open with whatever source is saved; reset happens via <C-e>.
+    jj_status_open(opts.args ~= '' and opts.args or nil)
+  end, { nargs = '*', desc = 'jj status picker; args are extra `jj diff` args, e.g. --from main' })
 end
 
 return M
