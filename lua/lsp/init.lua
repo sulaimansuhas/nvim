@@ -110,7 +110,7 @@ lspconfig.clangd.setup {
         '--all-scopes-completion=false',
         --'--include-cleaner-stdlib',
         '--limit-references=100',
-        '--log=verbose',
+        '--log=error',
         '--limit-results=40',
       },
       filetypes = { 'cpp', 'c' },
