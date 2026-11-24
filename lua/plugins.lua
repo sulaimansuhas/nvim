@@ -87,6 +87,30 @@ require('lazy').setup({
     build = ':TSUpdate',
   },
   {
+    -- Pin the enclosing function/class signature to the top of the window
+    'nvim-treesitter/nvim-treesitter-context',
+    dependencies = { 'nvim-treesitter/nvim-treesitter' },
+    event = { 'BufReadPost', 'BufNewFile' },
+    opts = {
+      max_lines = 4, -- cap how much of the screen nesting can claim
+    },
+    config = function(_, opts)
+      require('treesitter-context').setup(opts)
+      -- Distinct backdrop for the pinned context, with an underline separator
+      -- so it reads as a header rather than buffer text. Everforest defines
+      -- none of these groups, so re-derive them on every colorscheme switch.
+      local function context_hl()
+        local comment = vim.api.nvim_get_hl(0, { name = 'Comment', link = false })
+        vim.api.nvim_set_hl(0, 'TreesitterContext', { link = 'CursorLine' })
+        vim.api.nvim_set_hl(0, 'TreesitterContextLineNumber', { link = 'CursorLineNr' })
+        vim.api.nvim_set_hl(0, 'TreesitterContextBottom', { underline = true, sp = comment.fg })
+        vim.api.nvim_set_hl(0, 'TreesitterContextLineNumberBottom', { underline = true, sp = comment.fg })
+      end
+      context_hl()
+      vim.api.nvim_create_autocmd('ColorScheme', { callback = context_hl })
+    end,
+  },
+  {
     "julienvincent/hunk.nvim",
     cmd = { "DiffEditor" },
     config = function()
